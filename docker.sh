@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-ARCH=$(uname -m)
+ARCH=${ARCH:=$(uname -m)}
 GIT_COMMIT=$(git rev-parse HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 DOCKER_TAG=rustvmm/dev
@@ -37,10 +37,19 @@ build_tag(){
 # and will alias it with "latest" tag.
 build(){
   new_tag=$(build_tag)
+  case $ARCH in
+    riscv | riscv64)
+      dockerfile=Dockerfile.riscv64
+      ;;
+    *)
+      dockerfile=Dockerfile
+      ;;
+  esac
+  echo "docker build"
   docker build -t "$new_tag" \
         --build-arg GIT_BRANCH="${GIT_BRANCH}" \
         --build-arg GIT_COMMIT="${GIT_COMMIT}" \
-        -f Dockerfile .
+        -f $dockerfile .
   echo "Build completed for $new_tag"
 }
 

@@ -1,0 +1,72 @@
+FROM ubuntu:22.04
+ARG RUST_TOOLCHAIN="1.72.0"
+ENV PATH="$PATH:/root/.cargo/bin"
+
+ARG QEMU_TAG=stable-8.1
+ARG BUILDROOT_TAG=2023.08.2
+ARG OPENSBI_TAG=v1.3.1
+ARG LINUX_TAG=v6.5
+ARG CARGO_TAG=0.74.0
+
+ARG DIR_PREFIX=/opt/build
+ARG OUTPUT_DIR=/opt/bin
+RUN mkdir -p $OUTPUT_DIR
+
+ARG OPENSBI_DIR=$DIR_PREFIX/opensbi
+ARG QEMU_DIR=$DIR_PREFIX/qemu
+ARG BUILDROOT_DIR=$DIR_PREFIX/buildroot
+ARG LINUX_DIR=$DIR_PREFIX/linux
+ARG CARGO_DIR=$DIR_PREFIX/cargo
+
+ARG ARCH=riscv
+ARG CROSS_COMPILE=riscv64-linux-gnu-
+
+RUN apt update
+RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget cpio unzip rsync bc vim curl
+# RUN apt -y install libssl-dev libudev-dev 
+# RUN apt -y install openssl
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
+RUN rustup target add riscv64gc-unknown-linux-gnu
+
+WORKDIR $DIR_PREFIX
+RUN git clone --depth 1 --branch $CARGO_TAG https://github.com/rust-lang/cargo.git
+RUN git clone --depth 1 --branch $OPENSBI_TAG https://github.com/riscv-software-src/opensbi.git
+RUN git clone --depth 1 --branch $QEMU_TAG https://gitlab.com/qemu-project/qemu.git
+RUN git clone --depth 1 --branch $BUILDROOT_TAG https://github.com/buildroot/buildroot.git
+RUN git clone --depth 1 --branch $LINUX_TAG https://github.com/torvalds/linux.git
+
+WORKDIR $CARGO_DIR
+RUN cargo build --release --target=riscv64gc-unknown-linux-gnu --config target.riscv64gc-unknown-linux-gnu.linker=\"riscv64-linux-gnu-gcc\" --features vendored-openssl
+
+WORKDIR $OPENSBI_DIR
+RUN make -j PLATFORM=generic FW_OPTIONS=0 FW_JUMP_FDT_ADDR=0xa0000000
+RUN cp $OPENSBI_DIR/build/platform/generic/firmware/fw_jump.elf $OUTPUT_DIR
+
+WORKDIR $QEMU_DIR
+RUN ./configure --target-list="riscv64-softmmu" --enable-slirp --prefix=/usr/local && \
+	make -j$(nproc) && \
+	make install
+
+WORKDIR $BUILDROOT_DIR
+COPY riscv64/buildroot_defconfig $BUILDROOT_DIR/configs/
+RUN echo LINUX_OVERRIDE_SRCDIR=$LINUX_DIR > $BUILDROOT_DIR/local.mk
+RUN make buildroot_defconfig && make toolchain
+RUN make linux
+RUN make
+
+RUN cp $BUILDROOT_DIR/output/images/Image $OUTPUT_DIR
+
+WORKDIR /
+RUN git clone --depth 1 --branch patch-riscv https://github.com/endeneer/linux-loader.git
+
+RUN mkdir -p $BUILDROOT_DIR/output/target/bin
+RUN cp $CARGO_DIR/target/riscv64gc-unknown-linux-gnu/release/cargo $BUILDROOT_DIR/output/target/bin
+
+RUN apt -y install libslirp-dev
+
+WORKDIR $BUILDROOT_DIR
+COPY riscv64/inittab $BUILDROOT_DIR/output/target/etc/
+RUN make
+RUN cp $BUILDROOT_DIR/output/images/rootfs.cpio $OUTPUT_DIR
+
