@@ -14,6 +14,8 @@ qemu-system-riscv64 \
 	-kernel $LINUX_IMAGE \
 	-append "root=/dev/ram rw console=ttyS0 earlycon=sbi nokaslr" \
 	-initrd $BUILDROOT_ROOTFS_CPIO \
+	-device virtio-net-device,netdev=usernet \
+	-netdev user,id=usernet\
 	-virtfs local,path=/linux-loader,mount_tag=host0,security_model=mapped,id=host0
 	# mkdir /mnt/my9p
 	# mount -t 9p -o trans=virtio,version=9p2000.L host0 /mnt/my9p

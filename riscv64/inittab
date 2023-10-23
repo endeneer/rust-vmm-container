@@ -31,6 +31,7 @@ null::sysinit:/bin/ln -sf /proc/self/fd/2 /dev/stderr
 
 # Initial setup
 ::sysinit:/bin/sh -c "modprobe kvm"
+::sysinit:/bin/sh -c "echo nameserver 8.8.8.8 > /etc/resolv.conf"
 
 # Mount rust-vmm repo to be tested
 ::sysinit:/bin/sh -c "mkdir -p /test"

@@ -63,10 +63,35 @@ RUN git clone --depth 1 --branch patch-riscv https://github.com/endeneer/linux-l
 RUN mkdir -p $BUILDROOT_DIR/output/target/bin
 RUN cp $CARGO_DIR/target/riscv64gc-unknown-linux-gnu/release/cargo $BUILDROOT_DIR/output/target/bin
 
-RUN apt -y install libslirp-dev
+RUN apt -y install libslirp-dev cmake g++-riscv64-linux-gnu
 
 WORKDIR $BUILDROOT_DIR
+COPY riscv64/interfaces $BUILDROOT_DIR/output/target/etc/network/
 COPY riscv64/inittab $BUILDROOT_DIR/output/target/etc/
 RUN make
 RUN cp $BUILDROOT_DIR/output/images/rootfs.cpio $OUTPUT_DIR
 
+ARG RUST_DIR=$DIR_PREFIX/rust
+ARG RUST_TAG=1.72.0
+WORKDIR $DIR_PREFIX
+RUN git clone --depth 1 --branch $RUST_TAG https://github.com/rust-lang/rust.git
+WORKDIR $RUST_DIR
+COPY riscv64/config.toml $RUST_DIR
+RUN ./x build -i --host=riscv64gc-unknown-linux-gnu --target=riscv64gc-unknown-linux-gnu --stage 2 compiler/rustc
+RUN DESTDIR=$BUILDROOT_DIR/output/target ./x install -i --host=riscv64gc-unknown-linux-gnu --target=riscv64gc-unknown-linux-gnu compiler/rustc library/std
+
+ARG GCC_DIR=$DIR_PREFIX/gcc
+ARG GCC_TAG=releases/gcc-13.2.0
+WORKDIR $DIR_PREFIX
+RUN git clone --depth 1 --branch $GCC_TAG git://gcc.gnu.org/git/gcc.git
+WORKDIR $GCC_DIR
+RUN ./contrib/download_prerequisites
+RUN apt -y install binutils-riscv64-linux-gnu flex
+RUN ./configure --prefix=$BUILDROOT_DIR/output/target --host=riscv64-linux-gnu --target=riscv64-linux-gnu --enable-languages=c,c++
+RUN make -j$(nproc)
+RUN make install
+
+
+WORKDIR $BUILDROOT_DIR
+RUN make
+RUN cp $BUILDROOT_DIR/output/images/rootfs.cpio $OUTPUT_DIR
