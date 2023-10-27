@@ -1,143 +1,101 @@
 FROM ubuntu:22.04
-ARG RUST_TOOLCHAIN="1.72.0"
 ENV PATH="$PATH:/root/.cargo/bin"
-
-ARG QEMU_TAG=stable-8.1
-ARG BUILDROOT_TAG=2023.08.2
-ARG OPENSBI_TAG=v1.3.1
-ARG LINUX_TAG=v6.5
-ARG CARGO_TAG=0.74.0
-
-ARG DIR_PREFIX=/opt/build
-ARG OUTPUT_DIR=/opt/bin
-RUN mkdir -p $OUTPUT_DIR
-
-ARG OPENSBI_DIR=$DIR_PREFIX/opensbi
-ARG QEMU_DIR=$DIR_PREFIX/qemu
-ARG BUILDROOT_DIR=$DIR_PREFIX/buildroot
-ARG LINUX_DIR=$DIR_PREFIX/linux
-ARG CARGO_DIR=$DIR_PREFIX/cargo
-
 ARG ARCH=riscv
 ARG CROSS_COMPILE=riscv64-linux-gnu-
 
+#==============================
+# Version tag
+#==============================
+ARG RUST_TOOLCHAIN="1.72.0"
+ARG QEMU_TAG=v8.1.2
+ARG OPENSBI_TAG=v1.3.1
+ARG LINUX_TAG=v6.5
+
+#==============================
+# Directory paths
+#==============================
+## Directory path to git clone repos to
+ARG DIR_PREFIX=/opt/build
+## Build output path
+ARG OUTPUT_DIR=/opt/bin
+RUN mkdir -p $OUTPUT_DIR
+
+## Repo paths
+ARG QEMU_DIR=$DIR_PREFIX/qemu
+ARG OPENSBI_DIR=$DIR_PREFIX/opensbi
+ARG LINUX_DIR=$DIR_PREFIX/linux
+
+#==============================
+# Prerequisites
+#==============================
 RUN apt update
-RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget cpio unzip rsync bc vim curl libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex
+RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget cpio unzip rsync bc vim curl libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex bison qemu-user-static binfmt-support debootstrap
+#debian-ports-archive-keyring systemd-container
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
 RUN rustup target add riscv64gc-unknown-linux-gnu
 
 WORKDIR $DIR_PREFIX
-RUN git clone --depth 1 --branch $CARGO_TAG https://github.com/rust-lang/cargo.git
-RUN git clone --depth 1 --branch $OPENSBI_TAG https://github.com/riscv-software-src/opensbi.git
 RUN git clone --depth 1 --branch $QEMU_TAG https://gitlab.com/qemu-project/qemu.git
-RUN git clone --depth 1 --branch $BUILDROOT_TAG https://github.com/buildroot/buildroot.git
+RUN git clone --depth 1 --branch $OPENSBI_TAG https://github.com/riscv-software-src/opensbi.git
 RUN git clone --depth 1 --branch $LINUX_TAG https://github.com/torvalds/linux.git
 
-WORKDIR $CARGO_DIR
-RUN cargo build --release --target=riscv64gc-unknown-linux-gnu --config target.riscv64gc-unknown-linux-gnu.linker=\"riscv64-linux-gnu-gcc\" --features vendored-openssl
-
-WORKDIR $OPENSBI_DIR
-RUN make -j PLATFORM=generic FW_OPTIONS=0 FW_JUMP_FDT_ADDR=0xa0000000
-RUN cp $OPENSBI_DIR/build/platform/generic/firmware/fw_jump.elf $OUTPUT_DIR
-
+#==============================
+# QEMU
+#==============================
 WORKDIR $QEMU_DIR
 RUN ./configure --target-list="riscv64-softmmu" --enable-slirp --prefix=/usr/local && \
 	make -j$(nproc) && \
 	make install
 
-#WORKDIR $BUILDROOT_DIR
-#COPY riscv64/buildroot_defconfig $BUILDROOT_DIR/configs/
-#RUN echo LINUX_OVERRIDE_SRCDIR=$LINUX_DIR > $BUILDROOT_DIR/local.mk
+#==============================
+# OpenSBI
+#==============================
+WORKDIR $OPENSBI_DIR
+RUN make -j$(nproc) PLATFORM=generic FW_OPTIONS=0 FW_JUMP_FDT_ADDR=0xa0000000
+RUN mv $OPENSBI_DIR/build/platform/generic/firmware/fw_jump.elf $OUTPUT_DIR
 
-RUN apt -y install bison
-RUN sed -i "s|^CONFIG_KVM=.*|CONFIG_KVM=y|g" $LINUX_DIR/arch/riscv/configs/defconfig
+#==============================
+# Linux
+#==============================
 WORKDIR $LINUX_DIR
-RUN make defconfig
-RUN make -j$(nproc)
-RUN cp $LINUX_DIR/arch/riscv/boot/Image $OUTPUT_DIR
+RUN sed -i "s|^CONFIG_KVM=.*|CONFIG_KVM=y|g" $LINUX_DIR/arch/riscv/configs/defconfig
+RUN make defconfig && make -j$(nproc)
+RUN mv $LINUX_DIR/arch/riscv/boot/Image $OUTPUT_DIR
 
-#RUN make buildroot_defconfig && make linux-reconfigure
+#==============================
+# Root Filesystem
+#==============================
+ARG ROOTFS_DIR=/rootfs
+WORKDIR $ROOTFS_DIR
+## In the rare case of this step failing, try search in http://mirrors.ubuntu.com for other ubuntu-ports mirror
+RUN debootstrap --components=main,universe --include=ifupdown --arch=riscv64 --no-merged-usr --exclude=usr-is-merged mantic $ROOTFS_DIR https://jp.mirror.coganng.com/ubuntu-ports
+# http://ports.ubuntu.com/ubuntu-ports
+# https://mirrors.mit.edu/ubuntu-ports
 
-#RUN cp $BUILDROOT_DIR/output/images/Image $OUTPUT_DIR
+## Install test service that run CI test on systemd boot
+COPY riscv64/test.service $ROOTFS_DIR/etc/systemd/system/
+COPY riscv64/test-service.sh $ROOTFS_DIR/bin/
+### Workaround to `systemctl enable test`, since we aren't allowed to chroot in docker build
+RUN ln -s /etc/systemd/system/test.service $ROOTFS_DIR/etc/systemd/system/multi-user.target.wants/test.service
+
+## Install network-related configurations
+COPY riscv64/interfaces $ROOTFS_DIR/etc/network/
+COPY riscv64/resolv.conf $ROOTFS_DIR/etc/
+
+## Install devmem to be used to exit QEMU
+RUN wget -P $ROOTFS_DIR https://raw.githubusercontent.com/byates/devmem/master/devmem.c
+RUN riscv64-linux-gnu-gcc -o $ROOTFS_DIR/bin/devmem $ROOTFS_DIR/devmem.c
+RUN rm $ROOTFS_DIR/devmem.c
+
+## Install script for starting QEMU RISC-V guest
+COPY riscv64/qemu.sh /bin/
+
+#==============================
+# Cleanup
+#==============================
+RUN rm -rf $QEMU_DIR
+RUN rm -rf $OPENSBI_DIR
+RUN rm -rf $LINUX_DIR
 
 WORKDIR /
-RUN git clone --depth 1 --branch patch-riscv https://github.com/endeneer/linux-loader.git
-
-
-#RUN apt -y install debootstrap qemu qemu-user-static binfmt-support dpkg-cross debian-ports-archive-keyring --no-install-recommends
-#RUN apt -y install debian-keyring debian-archive-keyring
-#RUN debootstrap --arch=riscv64 --foreign --keyring /usr/share/keyrings/debian-ports-archive-keyring.gpg --include=debian-ports-archive-keyring sid ./temp-rootfs http://deb.debian.org/debian-ports
-
-RUN apt -y install qemu-user-static binfmt-support debootstrap debian-ports-archive-keyring systemd-container
-RUN apt update
-#RUN debootstrap --include=build-essential,rustc,cargo,git --arch=riscv64 --no-merged-usr --exclude=usr-is-merged unstable /temp-rootfs https://deb.debian.org/debian
-RUN debootstrap --components=main,universe --include=build-essential,rustc,cargo,git,ifupdown,iproute2,curl,devmem2 --arch=riscv64 --no-merged-usr --exclude=usr-is-merged mantic /temp-rootfs https://mirrors.mit.edu/ubuntu-ports
-# https://launchpad.net/ubuntu/+archivemirrors
-# http://mirrors.ubuntu.com
-# https://mirrors.mit.edu/ubuntu-ports
-# https://mirror.coganng.com/ubuntu-ports
-# http://ports.ubuntu.com/ubuntu-ports
-
-# RUN debootstrap --arch=riscv64 unstable /temp-rootfs https://deb.debian.org/debian
-WORKDIR /temp-rootfs
-COPY riscv64/test.service /temp-rootfs/etc/systemd/system/
-COPY riscv64/test-starter.sh /temp-rootfs/bin/
-RUN ln -s /etc/systemd/system/test.service /temp-rootfs/etc/systemd/system/multi-user.target.wants/test.service
-COPY riscv64/interfaces /temp-rootfs/etc/network/
-COPY riscv64/resolv.conf /temp-rootfs/etc/
-RUN wget https://raw.githubusercontent.com/byates/devmem/master/devmem.c
-RUN riscv64-linux-gnu-gcc -o /temp-rootfs/bin/devmem devmem.c
-RUN rm devmem.c
-#RUN cp $CARGO_DIR/target/riscv64gc-unknown-linux-gnu/release/cargo /temp-rootfs/usr/bin/
-
-WORKDIR $OUTPUT_DIR
-#RUN mke2fs -r 1 -N 0 -m 5 -L rootfs -I 256 -O 64bit -t ext4 -d /temp-rootfs rootfs.ext4 2G
-
-#RUN find | cpio --quiet -o -H newc  > /opt/bin/rootfs.cpio
-
-#RUN mkdir -p $BUILDROOT_DIR/output/target/bin
-#RUN cp $CARGO_DIR/target/riscv64gc-unknown-linux-gnu/release/cargo $BUILDROOT_DIR/output/target/bin
-
-#WORKDIR $BUILDROOT_DIR
-#COPY riscv64/interfaces $BUILDROOT_DIR/output/target/etc/network/
-#COPY riscv64/inittab $BUILDROOT_DIR/output/target/etc/
-#RUN make
-#RUN cp $BUILDROOT_DIR/output/images/rootfs.cpio $OUTPUT_DIR
-#
-#ARG RUST_DIR=$DIR_PREFIX/rust
-#ARG RUST_TAG=1.70.0
-#WORKDIR $DIR_PREFIX
-#RUN git clone --depth 1 --branch $RUST_TAG https://github.com/rust-lang/rust.git
-#WORKDIR $RUST_DIR
-#COPY riscv64/config.toml $RUST_DIR
-#RUN ./x build -i --host=riscv64gc-unknown-linux-gnu --target=riscv64gc-unknown-linux-gnu --stage 2 compiler/rustc
-#RUN DESTDIR=$BUILDROOT_DIR/output/target ./x install -i --host=riscv64gc-unknown-linux-gnu --target=riscv64gc-unknown-linux-gnu compiler/rustc library/std
-#
-#ARG GCC_DIR=$DIR_PREFIX/gcc
-#ARG GCC_TAG=releases/gcc-11.4.0
-#WORKDIR $DIR_PREFIX
-#RUN git clone --depth 1 --branch $GCC_TAG git://gcc.gnu.org/git/gcc.git
-#WORKDIR $GCC_DIR
-#RUN ./contrib/download_prerequisites
-#RUN ./configure --prefix=$BUILDROOT_DIR/output/target --host=riscv64-linux-gnu --target=riscv64-linux-gnu --enable-languages=c,c++ --disable-werror --disable-libitm --disable-libquadmath --disable-libquadmath-support --enable-multilib --enable-targets=riscv64-linux-gnu
-#RUN make -j$(nproc)
-#RUN make install
-#
-#ARG GLIBC_DIR=$DIR_PREFIX/glibc
-#ARG GLIBC_TAG=glibc-2.35
-#WORKDIR $DIR_PREFIX
-#RUN git clone --depth 1 --branch $GLIBC_TAG https://sourceware.org/git/glibc.git
-#WORKDIR $GLIBC_DIR
-#RUN mkdir build
-#WORKDIR $GLIBC_DIR/build
-#RUN apt -y install gawk bison
-#RUN ../configure --prefix=$BUILDROOT_DIR/output/target --host=riscv64-linux-gnu --target=riscv64-linux-gnu 
-#RUN make -j$(nproc)
-#RUN make install
-#
-#WORKDIR $BUILDROOT_DIR
-#RUN make
-#RUN cp $BUILDROOT_DIR/output/images/rootfs.cpio $OUTPUT_DIR
-
-WORKDIR /test

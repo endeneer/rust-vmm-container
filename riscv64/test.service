@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=idle
-ExecStart=/bin/bash /bin/test-starter.sh
+ExecStart=/bin/bash /bin/test-service.sh
 StandardOutput=tty
 TTYPath=/dev/ttyS0
 

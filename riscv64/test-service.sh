@@ -10,7 +10,7 @@ set -e
 ## QEMU virtfs mount_tag
 REPO_MOUNT_TAG=test
 ## Where to mount the repo to be tested, the repo shall be pre-cross-compiled in host machine
-REPO_MOUNT_POINT=/test
+REPO_MOUNT_POINT=/workdir
 
 ## $1: The exit code (in decimal) that you want QEMU to exit with
 exit_qemu_with_code() {
@@ -25,24 +25,10 @@ exit_qemu_with_code() {
 trap 'exit_qemu_with_code $?' ERR
 trap 'exit_qemu_with_code 0' EXIT
 
-## Dependencies check
-ls /dev/kvm
-#ping -c 1 github.com || exit_qemu_with_code $?
-#git --version || exit_qemu_with_code $?
-#rustc -vV || exit_qemu_with_code $?
-#gcc -v || exit_qemu_with_code $?
-#cargo --version || exit_qemu_with_code $?
-
 echo "Mounting repo to be tested..."
 mkdir -p $REPO_MOUNT_POINT
-mount -t 9p -o rw,trans=virtio,version=9p2000.L,posixacl,msize=512000,cache=mmap $REPO_MOUNT_TAG $REPO_MOUNT_POINT
+mount -t 9p -o rw,trans=virtio,version=9p2000.L,posixacl,cache=mmap,msize=512000 $REPO_MOUNT_TAG $REPO_MOUNT_POINT
 mount | grep 9p
-
-# cd /
-#git clone --depth 1 --branch patch-riscv https://github.com/endeneer/linux-loader.git
-# mkdir -p /linux-loader
-# cp -a /test/. /linux-loader/.
-# cd /linux-loader
 
 echo "Searching for cross-compiled test binaries..."
 IFS=$'\n'
