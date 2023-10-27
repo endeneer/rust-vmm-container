@@ -6,7 +6,8 @@ host = ["riscv64gc-unknown-linux-gnu"]
 target = ["x86_64-unknown-linux-gnu", "riscv64gc-unknown-linux-gnu"]
 
 [llvm]
-download-ci-llvm = false
 targets = "RISCV;X86"
 experimental-targets = ""
+download-ci-llvm = false
+static-libstdcpp = true
 

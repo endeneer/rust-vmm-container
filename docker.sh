@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+current_dir="$(dirname $(readlink -f "$0"))"
 ARCH=${ARCH:=$(uname -m)}
 GIT_COMMIT=$(git rev-parse HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
