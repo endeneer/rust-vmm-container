@@ -72,7 +72,7 @@ RUN git clone --depth 1 --branch patch-riscv https://github.com/endeneer/linux-l
 RUN apt -y install qemu-user-static binfmt-support debootstrap debian-ports-archive-keyring systemd-container
 RUN apt update
 #RUN debootstrap --include=build-essential,rustc,cargo,git --arch=riscv64 --no-merged-usr --exclude=usr-is-merged unstable /temp-rootfs https://deb.debian.org/debian
-RUN debootstrap --components=main,universe --include=build-essential,rustc,cargo,git,ifupdown,iproute2,devmem2 --arch=riscv64 --no-merged-usr --exclude=usr-is-merged mantic /temp-rootfs https://mirrors.mit.edu/ubuntu-ports
+RUN debootstrap --components=main,universe --include=build-essential,rustc,cargo,git,ifupdown,iproute2,curl,devmem2 --arch=riscv64 --no-merged-usr --exclude=usr-is-merged mantic /temp-rootfs https://mirrors.mit.edu/ubuntu-ports
 # https://launchpad.net/ubuntu/+archivemirrors
 # http://mirrors.ubuntu.com
 # https://mirrors.mit.edu/ubuntu-ports
@@ -92,7 +92,7 @@ RUN rm devmem.c
 #RUN cp $CARGO_DIR/target/riscv64gc-unknown-linux-gnu/release/cargo /temp-rootfs/usr/bin/
 
 WORKDIR $OUTPUT_DIR
-RUN mke2fs -r 1 -N 0 -m 5 -L rootfs -I 256 -O ^64bit -t ext4 -d /temp-rootfs rootfs.ext4 2G
+RUN mke2fs -r 1 -N 0 -m 5 -L rootfs -I 256 -O 64bit -t ext4 -d /temp-rootfs rootfs.ext4 2G
 
 #RUN find | cpio --quiet -o -H newc  > /opt/bin/rootfs.cpio
 

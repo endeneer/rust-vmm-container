@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+## This script is executed by host inside docker to run QEMU RISC-V guest
 OUTPUT_DIR=/opt/bin
 OPENSBI_FW_JUMP_ELF=$OUTPUT_DIR/fw_jump.elf
 LINUX_IMAGE=$OUTPUT_DIR/Image
@@ -8,31 +9,33 @@ ROOTFS_EXT4=$OUTPUT_DIR/rootfs.ext4
 
 echo "QEMU"
 # Using 9pfs
-# qemu-system-riscv64 \
-# 	-M virt -nographic \
-# 	-smp $(nproc) -cpu rv64,h=true,v=true \
-# 	-m 6G \
-# 	-bios $OPENSBI_FW_JUMP_ELF \
-# 	-kernel $LINUX_IMAGE \
-# 	-device virtio-net-device,netdev=usernet \
-# 	-netdev user,id=usernet\
-# 	-virtfs local,path=/temp-rootfs,mount_tag=host1,security_model=none,id=host1 \
-# 	-append "root=host1 rw rootfstype=9p rootflags=trans=virtio,cache=mmap,msize=512000 console=ttyS0 earlycon=sbi nokaslr rdinit=/sbin/init" \
-# 	-virtfs local,path=/linux-loader,mount_tag=host0,security_model=mapped,id=host0
-
-# Using ext4
 qemu-system-riscv64 \
 	-M virt -nographic \
-	-smp $(nproc) -cpu rv64,h=true \
+	-smp $(nproc) -cpu rv64,h=true,v=true \
 	-m 6G \
 	-bios $OPENSBI_FW_JUMP_ELF \
 	-kernel $LINUX_IMAGE \
 	-device virtio-net-device,netdev=usernet \
 	-netdev user,id=usernet\
-	-append "root=/dev/vda rw console=ttyS0 earlycon=sbi nokaslr rdinit=/sbin/init" \
-	-drive file=$ROOTFS_EXT4,format=raw,id=hd0 \
-	-device virtio-blk-device,drive=hd0 \
-	-virtfs local,path=/linux-loader,mount_tag=host0,security_model=mapped,id=host0
+	-virtfs local,path=/temp-rootfs,mount_tag=rootfs,security_model=none,id=rootfs \
+	-append "root=rootfs rw rootfstype=9p rootflags=trans=virtio,cache=mmap,msize=512000 console=ttyS0 earlycon=sbi nokaslr rdinit=/sbin/init" \
+	-virtfs local,path=/linux-loader,mount_tag=test,security_model=mapped,id=test
+exit $?
+
+# Using ext4
+# qemu-system-riscv64 \
+# 	-M virt -nographic \
+# 	-smp $(nproc) -cpu rv64,h=true \
+# 	-m 4G \
+# 	-bios $OPENSBI_FW_JUMP_ELF \
+# 	-kernel $LINUX_IMAGE \
+# 	-device virtio-net-device,netdev=usernet \
+# 	-netdev user,id=usernet\
+# 	-append "root=/dev/vda rw console=ttyS0 earlycon=sbi nokaslr rdinit=/sbin/init" \
+# 	-drive file=$ROOTFS_EXT4,format=raw,id=hd0 \
+# 	-device virtio-blk-device,drive=hd0 \
+# 	-virtfs local,path=/linux-loader,mount_tag=test,security_model=mapped,id=test
+# exit $?
 
 
 
