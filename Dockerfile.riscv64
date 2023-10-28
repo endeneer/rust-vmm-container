@@ -47,10 +47,6 @@ WORKDIR $QEMU_DIR
 RUN ./configure --target-list="riscv64-softmmu" --enable-slirp --prefix=$INSTALL_DIR/usr/local && \
 	make -j$(nproc) && \
 	make install
-## Install devmem to be used to exit QEMU
-RUN wget https://raw.githubusercontent.com/byates/devmem/master/devmem.c
-RUN mkdir -p $INSTALL_DIR/bin
-RUN riscv64-linux-gnu-gcc -o $INSTALL_DIR/bin/devmem devmem.c && rm devmem.c
 
 #--------------------
 # OpenSBI
@@ -71,8 +67,8 @@ RUN mv $LINUX_DIR/arch/riscv/boot/Image $OUTPUT_DIR
 # Root Filesystem
 #==============================
 FROM riscv64/ubuntu:22.04 AS rootfs_builder
-RUN apt update
-RUN apt install -y systemd ifupdown
+RUN apt update && apt upgrade -y
+RUN apt install -y systemd init ifupdown busybox udev
 
 ## Install test service that run CI test on systemd boot
 COPY riscv64/test.service /etc/systemd/system/
@@ -99,13 +95,13 @@ ARG RUST_TOOLCHAIN="1.72.0"
 ARG OUTPUT_DIR=/opt/bin
 ARG INSTALL_DIR=/opt/install
 ARG ROOTFS_DIR=/rootfs
-ENV PATH="$PATH:/root/.cargo/bin:$INSTALL_DIR/bin:$INSTALL_DIR/usr/local"
+ENV PATH="$PATH:/root/.cargo/bin:$INSTALL_DIR/usr/local/bin"
 
 #--------------------
 # Prerequisites
 #--------------------
 RUN apt update
-RUN apt install -y curl libfdt-dev
+RUN apt install -y curl libglib2.0-dev libfdt-dev libpixman-1-dev libslirp-dev gcc gcc-riscv64-linux-gnu
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
 RUN rustup target add riscv64gc-unknown-linux-gnu

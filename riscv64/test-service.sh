@@ -19,7 +19,7 @@ exit_qemu_with_code() {
 	local encoded_exit_code=$(printf "0x%x" $(( ($exit_code_in_hex << 16) + 0x3333)))
 	echo "Exiting QEMU with exit code $exit_code..."
 	## Trigger QEMU exit by writing to SiFive Test MMIO device at 0x100000
-	devmem 0x100000 w $encoded_exit_code
+	busybox devmem 0x100000 w $encoded_exit_code
 }
 
 trap 'exit_qemu_with_code $?' ERR
@@ -41,7 +41,7 @@ printf "%s\n" "${test_bin[@]}"
 echo "Running the cross-compiled test binaries..."
 for (( i = 0; i < ${#test_bin[@]} ; i++ )); do
 	echo "*****************************************"
-	echo "Running: ${test_bin[$i]}"
+	echo "Running: $(basename ${test_bin[$i]})"
 	echo "*****************************************"
 	eval "${test_bin[$i]}"
 done

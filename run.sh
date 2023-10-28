@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 
-HOST_DIR=/home/user/git/worktree/personal/kvm-ioctls-riscv/rust-vmm-container
-docker run -it -v $HOST_DIR:/test rustvmm/dev:v29_riscv64 bash
+REPO_DIR=/tmp/linux-loader
+REPO_MOUNT_POINT=/workdir
+docker run -it -v $REPO_DIR:$REPO_MOUNT_POINT --workdir $REPO_MOUNT_POINT rustvmm/dev:v29_riscv64 bash
