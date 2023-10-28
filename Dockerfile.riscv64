@@ -32,8 +32,7 @@ ARG LINUX_DIR=$DIR_PREFIX/linux
 # Prerequisites
 #--------------------
 RUN apt update
-RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget curl bc libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex bison
-#RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget cpio unzip rsync bc vim curl libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex bison qemu-user-static binfmt-support debootstrap
+RUN apt -y install git python3 python3-pip build-essential pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev wget curl bc flex bison libslirp-dev
 
 WORKDIR $DIR_PREFIX
 RUN git clone --depth 1 --branch $QEMU_TAG https://gitlab.com/qemu-project/qemu.git
@@ -52,7 +51,7 @@ RUN ./configure --target-list="riscv64-softmmu" --enable-slirp --prefix=$INSTALL
 # OpenSBI
 #--------------------
 WORKDIR $OPENSBI_DIR
-RUN make -j$(nproc) PLATFORM=generic FW_OPTIONS=0 FW_JUMP_FDT_ADDR=0xa0000000
+RUN make -j$(nproc) PLATFORM=generic
 RUN mv $OPENSBI_DIR/build/platform/generic/firmware/fw_jump.elf $OUTPUT_DIR
 
 #--------------------
