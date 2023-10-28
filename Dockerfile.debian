@@ -1,6 +1,0 @@
-FROM ubuntu:22.04
-
-RUN apt update
-RUN apt -y upgrade
-RUN sudo apt install debootstrap qemu qemu-user-static binfmt-support dpkg-cross debian-ports-archive-keyring --no-install-recommends
-RUN sudo debootstrap --arch=riscv64 --foreign --keyring /usr/share/keyrings/debian-ports-archive-keyring.gpg --include=debian-ports-archive-keyring sid ./temp-rootfs http://deb.debian.org/debian-ports

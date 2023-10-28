@@ -9,8 +9,7 @@ ROOTFS_DIR=/rootfs
 ## The repo to be tested (the repo passed in by Docker host, will be passed to QEMU guest at the same path)
 REPO_MOUNT_POINT=/workdir
 
-echo "QEMU"
-
+echo "Running QEMU..."
 qemu-system-riscv64 \
 	-M virt -nographic \
 	-smp 6 -cpu rv64,h=true \

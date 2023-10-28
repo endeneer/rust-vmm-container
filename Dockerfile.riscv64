@@ -1,63 +1,67 @@
-FROM ubuntu:22.04
-ENV PATH="$PATH:/root/.cargo/bin"
+#==============================
+# Binaries Builder
+#==============================
+FROM ubuntu:22.04 AS builder
 ARG ARCH=riscv
 ARG CROSS_COMPILE=riscv64-linux-gnu-
 
-#==============================
+#--------------------
 # Version tag
-#==============================
-ARG RUST_TOOLCHAIN="1.72.0"
+#--------------------
 ARG QEMU_TAG=v8.1.2
 ARG OPENSBI_TAG=v1.3.1
 ARG LINUX_TAG=v6.5
 
-#==============================
+#--------------------
 # Directory paths
-#==============================
-## Directory path to git clone repos to
+#--------------------
+## Directory path where git clones repos to
 ARG DIR_PREFIX=/opt/build
-## Build output path
+## Build output path (to store output of make)
 ARG OUTPUT_DIR=/opt/bin
 RUN mkdir -p $OUTPUT_DIR
+## Build install path (to store output of make install)
+ARG INSTALL_DIR=/opt/install
 
 ## Repo paths
 ARG QEMU_DIR=$DIR_PREFIX/qemu
 ARG OPENSBI_DIR=$DIR_PREFIX/opensbi
 ARG LINUX_DIR=$DIR_PREFIX/linux
 
-#==============================
+#--------------------
 # Prerequisites
-#==============================
+#--------------------
 RUN apt update
-RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget cpio unzip rsync bc vim curl libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex bison qemu-user-static binfmt-support debootstrap
-#debian-ports-archive-keyring systemd-container
-
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
-RUN rustup target add riscv64gc-unknown-linux-gnu
+RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget curl bc libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex bison
+#RUN apt -y install git python3 python3-pip build-essential gcc pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev file wget cpio unzip rsync bc vim curl libslirp-dev cmake g++-riscv64-linux-gnu binutils-riscv64-linux-gnu flex bison qemu-user-static binfmt-support debootstrap
 
 WORKDIR $DIR_PREFIX
 RUN git clone --depth 1 --branch $QEMU_TAG https://gitlab.com/qemu-project/qemu.git
 RUN git clone --depth 1 --branch $OPENSBI_TAG https://github.com/riscv-software-src/opensbi.git
 RUN git clone --depth 1 --branch $LINUX_TAG https://github.com/torvalds/linux.git
 
-#==============================
+#--------------------
 # QEMU
-#==============================
+#--------------------
 WORKDIR $QEMU_DIR
-RUN ./configure --target-list="riscv64-softmmu" --enable-slirp --prefix=/usr/local && \
+RUN ./configure --target-list="riscv64-softmmu" --enable-slirp --prefix=$INSTALL_DIR/usr/local && \
 	make -j$(nproc) && \
 	make install
+## Install devmem to be used to exit QEMU
+RUN wget https://raw.githubusercontent.com/byates/devmem/master/devmem.c
+RUN mkdir -p $INSTALL_DIR/bin
+RUN riscv64-linux-gnu-gcc -o $INSTALL_DIR/bin/devmem devmem.c && rm devmem.c
 
-#==============================
+#--------------------
 # OpenSBI
-#==============================
+#--------------------
 WORKDIR $OPENSBI_DIR
 RUN make -j$(nproc) PLATFORM=generic FW_OPTIONS=0 FW_JUMP_FDT_ADDR=0xa0000000
 RUN mv $OPENSBI_DIR/build/platform/generic/firmware/fw_jump.elf $OUTPUT_DIR
 
-#==============================
+#--------------------
 # Linux
-#==============================
+#--------------------
 WORKDIR $LINUX_DIR
 RUN sed -i "s|^CONFIG_KVM=.*|CONFIG_KVM=y|g" $LINUX_DIR/arch/riscv/configs/defconfig
 RUN make defconfig && make -j$(nproc)
@@ -66,36 +70,52 @@ RUN mv $LINUX_DIR/arch/riscv/boot/Image $OUTPUT_DIR
 #==============================
 # Root Filesystem
 #==============================
-ARG ROOTFS_DIR=/rootfs
-WORKDIR $ROOTFS_DIR
-## In the rare case of this step failing, try search in http://mirrors.ubuntu.com for other ubuntu-ports mirror
-RUN debootstrap --components=main,universe --include=ifupdown --arch=riscv64 --no-merged-usr --exclude=usr-is-merged mantic $ROOTFS_DIR https://jp.mirror.coganng.com/ubuntu-ports
-# http://ports.ubuntu.com/ubuntu-ports
-# https://mirrors.mit.edu/ubuntu-ports
+FROM riscv64/ubuntu:22.04 AS rootfs_builder
+RUN apt update
+RUN apt install -y systemd ifupdown
 
 ## Install test service that run CI test on systemd boot
-COPY riscv64/test.service $ROOTFS_DIR/etc/systemd/system/
-COPY riscv64/test-service.sh $ROOTFS_DIR/bin/
-### Workaround to `systemctl enable test`, since we aren't allowed to chroot in docker build
-RUN ln -s /etc/systemd/system/test.service $ROOTFS_DIR/etc/systemd/system/multi-user.target.wants/test.service
+COPY riscv64/test.service /etc/systemd/system/
+COPY riscv64/test-service.sh /bin/
+RUN systemctl enable test
 
 ## Install network-related configurations
-COPY riscv64/interfaces $ROOTFS_DIR/etc/network/
-COPY riscv64/resolv.conf $ROOTFS_DIR/etc/
+COPY riscv64/interfaces /etc/network/
+COPY riscv64/resolv.conf /etc/
 
-## Install devmem to be used to exit QEMU
-RUN wget -P $ROOTFS_DIR https://raw.githubusercontent.com/byates/devmem/master/devmem.c
-RUN riscv64-linux-gnu-gcc -o $ROOTFS_DIR/bin/devmem $ROOTFS_DIR/devmem.c
-RUN rm $ROOTFS_DIR/devmem.c
+#==============================
+# Final-Stage Docker Image
+#==============================
+FROM ubuntu:22.04 AS final
+
+#--------------------
+# Version tag
+#--------------------
+ARG RUST_TOOLCHAIN="1.72.0"
+
+#--------------------
+# Directories to be installed from builder and rootfs_builder
+#--------------------
+ARG OUTPUT_DIR=/opt/bin
+ARG INSTALL_DIR=/opt/install
+ARG ROOTFS_DIR=/rootfs
+ENV PATH="$PATH:/root/.cargo/bin:$INSTALL_DIR/bin:$INSTALL_DIR/usr/local"
+
+#--------------------
+# Prerequisites
+#--------------------
+RUN apt update
+RUN apt install -y curl libfdt-dev
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
+RUN rustup target add riscv64gc-unknown-linux-gnu
+
+#--------------------
+# Combining all stages
+#--------------------
+COPY --from=builder $OUTPUT_DIR $OUTPUT_DIR
+COPY --from=builder $INSTALL_DIR $INSTALL_DIR
+COPY --from=rootfs_builder / $ROOTFS_DIR
 
 ## Install script for starting QEMU RISC-V guest
 COPY riscv64/qemu.sh /bin/
-
-#==============================
-# Cleanup
-#==============================
-RUN rm -rf $QEMU_DIR
-RUN rm -rf $OPENSBI_DIR
-RUN rm -rf $LINUX_DIR
-
-WORKDIR /
