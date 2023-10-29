@@ -22,8 +22,7 @@ exit_qemu_with_code() {
 	busybox devmem 0x100000 w $encoded_exit_code
 }
 
-trap 'exit_qemu_with_code $?' ERR
-trap 'exit_qemu_with_code 0' EXIT
+trap 'exit_qemu_with_code $?' 0
 
 echo "Mounting repo to be tested..."
 mkdir -p $REPO_MOUNT_POINT
