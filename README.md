@@ -2,7 +2,7 @@
 
 **`rustvmm/dev`** is a container with all dependencies used for running
 `rust-vmm` integration and performance tests. The container is available on
-Docker Hub and has support for `x86_64` and `aarch64` platforms.
+Docker Hub and has support for `x86_64`, `aarch64`, and `riscv64` platforms.
 
 For the latest available tag, please check the `rustvmm/dev` builds available
 on [Docker Hub](https://hub.docker.com/r/rustvmm/dev/tags).
@@ -32,6 +32,8 @@ Example of running cargo build on the kvm-ioctls crate:
    Compiling kvm-ioctls v0.0.1 (/kvm-ioctls)
     Finished release [optimized] target(s) in 5.63s
 ```
+
+Examples of running cargo build/test for riscv64 can be found in [riscv64/examples](`riscv64/examples`).
 
 ## Publishing a New Version
 
@@ -63,6 +65,14 @@ On an `aarch64` platform:
 ```bash
 > cd rust-vmm-dev-container
 > ./docker.sh build
+> ./docker.sh publish
+```
+
+For `riscv64` platform, `ARCH` needs to be set since its Dockerfile is different:
+
+```bash
+> cd rust-vmm-dev-container
+> ARCH=riscv64 ./docker.sh build
 > ./docker.sh publish
 ```
 
