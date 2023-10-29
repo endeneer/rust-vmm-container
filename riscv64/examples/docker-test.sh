@@ -2,12 +2,13 @@
 
 REPO_DIR=/tmp/linux-loader
 REPO_MOUNT_POINT=/workdir
+IMAGE_TAG=rustvmm/dev:v29_riscv64
 
 ## CI: build-gnu-riscv64
 docker run -it --rm \
 	-v $REPO_DIR:$REPO_MOUNT_POINT \
 	--workdir $REPO_MOUNT_POINT \
-	rustvmm/dev:v29_riscv64 \
+	$IMAGE_TAG \
 	sh -c -e \
 	"trap 'chown -R $(id -u):$(id -u) $REPO_MOUNT_POINT' 0; \
 	RUSTFLAGS=\"-D warnings\" \
@@ -18,7 +19,7 @@ docker run -it --rm \
 docker run -it --rm \
 	-v $REPO_DIR:$REPO_MOUNT_POINT \
 	--workdir $REPO_MOUNT_POINT \
-	rustvmm/dev:v29_riscv64 \
+	$IMAGE_TAG \
 	sh -c -e \
 	"trap 'chown -R $(id -u):$(id -u) $REPO_MOUNT_POINT' 0; \
 	cargo test --no-run \

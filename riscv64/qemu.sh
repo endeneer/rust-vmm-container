@@ -20,6 +20,3 @@ qemu-system-riscv64 \
 	-virtfs local,path=$ROOTFS_DIR,mount_tag=rootfs,security_model=none,id=rootfs \
 	-append "root=rootfs rw rootfstype=9p rootflags=trans=virtio,cache=mmap,msize=512000 console=ttyS0 earlycon=sbi nokaslr rdinit=/sbin/init" \
 	-virtfs local,path=$REPO_MOUNT_POINT,mount_tag=test,security_model=mapped,id=test
-
-	# -object rng-random,filename=/dev/urandom,id=rng0 \
-	# -device virtio-rng-device,rng=rng0 \
