@@ -48,8 +48,12 @@ jobs:
       - name: Generate next docker tag
         # NOTE: The tag contains the full docker container name + tag as it is requested
         # by the build-and-push step.
+        env:
+          ARCH: riscv64
         run: |
-          echo "VERSION=$(ARCH=riscv64 ./docker.sh print-next-version)" >> $GITHUB_ENV
+          echo "VERSION=$(./docker.sh print-next-version)" >> $GITHUB_ENV
+      - name: Print next docker tag
+        run: |
           echo "Next version to be published is: ${{ env.VERSION }}"
 
       # Build and push Docker image with Buildx (don't push on PR)
