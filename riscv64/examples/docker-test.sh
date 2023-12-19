@@ -5,6 +5,7 @@ REPO_MOUNT_POINT=/workdir
 IMAGE_TAG=$(ARCH=riscv64 ../../docker.sh print-next-version)_riscv64
 
 ## CI: build-gnu-riscv64
+echo "build-gnu-riscv64"
 docker run -it --rm \
 	-v $REPO_DIR:$REPO_MOUNT_POINT \
 	--workdir $REPO_MOUNT_POINT \
@@ -16,6 +17,7 @@ docker run -it --rm \
 	--config target.riscv64gc-unknown-linux-gnu.linker=\\\"riscv64-linux-gnu-gcc\\\""
 
 ## CI: unittests-gnu-riscv64
+echo "unittests-gnu-riscv64"
 docker run -it --rm \
 	-v $REPO_DIR:$REPO_MOUNT_POINT \
 	--workdir $REPO_MOUNT_POINT \
