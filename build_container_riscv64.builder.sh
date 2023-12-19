@@ -31,8 +31,9 @@ LINUX_DIR=$DIR_PREFIX/linux
 #--------------------
 # Prerequisites
 #--------------------
+PACKAGE_LIST="git python3 python3-pip build-essential pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev wget curl bc flex bison libslirp-dev"
 apt-get update
-apt-get -y install git python3 python3-pip build-essential pkg-config libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build gcc-riscv64-linux-gnu libssl-dev wget curl bc flex bison libslirp-dev
+apt-get -y install $PACKAGE_LIST
 
 cd $DIR_PREFIX
 git clone --depth 1 --branch $QEMU_TAG https://gitlab.com/qemu-project/qemu.git
@@ -62,3 +63,10 @@ sed -i "s|^CONFIG_KVM=.*|CONFIG_KVM=y|g" $LINUX_DIR/arch/riscv/configs/defconfig
 make defconfig && make -j$(nproc)
 mv $LINUX_DIR/arch/riscv/boot/Image $OUTPUT_DIR
 
+#--------------------
+# Cleanup
+#--------------------
+rm -rf $QEMU_DIR
+rm -rf $OPENSBI_DIR
+rm -rf $LINUX_DIR
+apt-get -y remove $PACKAGE_LIST

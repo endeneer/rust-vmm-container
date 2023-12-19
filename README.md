@@ -90,7 +90,7 @@ The above steps is a little bit different for `riscv64` platform:
 `ARCH` needs to be set since `riscv64` has dedicated Dockerfile.riscv64 and Docker repository:
 
 ```bash
-> cd rust-vmm-dev-container
+> cd rust-vmm-container
 > ARCH=riscv64 ./docker.sh build
 > ARCH=riscv64 ./docker.sh publish
 > ARCH=riscv64 ./docker.sh manifest
