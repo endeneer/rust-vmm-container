@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-ARCH=${ARCH:=$(uname -m)}
+ARCH=${ARCH:-$(uname -m)}
 GIT_COMMIT=$(git rev-parse HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 case $ARCH in
