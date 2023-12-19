@@ -12,7 +12,9 @@ RUN /opt/src/scripts/build_container_riscv64.builder.sh
 # Generate guest rootfs
 #==============================
 FROM riscv64/ubuntu:22.04 AS rootfs_builder
-RUN apt-get update && apt-get upgrade -y && apt-get install -y systemd init ifupdown busybox udev
+
+COPY build_container_riscv64.rootfs.sh /opt/src/scripts/build_container_riscv64.rootfs.sh
+RUN /opt/src/scripts/build_container_riscv64.rootfs.sh
 
 ## Install test service that run CI test on systemd boot
 COPY riscv64/test.service /etc/systemd/system/
