@@ -68,14 +68,6 @@ On an `aarch64` platform:
 > ./docker.sh publish
 ```
 
-For `riscv64` platform, `ARCH` needs to be set since its Dockerfile is different:
-
-```bash
-> cd rust-vmm-dev-container
-> ARCH=riscv64 ./docker.sh build
-> ./docker.sh publish
-```
-
 You will need to redo all steps on an `x86_64` platform so the containers are
 kept in sync (same package versions on both `x86_64` and `aarch64`).
 
@@ -93,3 +85,13 @@ fail with: ```docker manifest is only supported when experimental cli features
 are enabled```. Checkout
 [this article](https://medium.com/@mauridb/docker-multi-architecture-images-365a44c26be6)
 to understand why and how to fix it.
+
+The above steps is a little bit different for `riscv64` platform:  
+`ARCH` needs to be set since `riscv64` has dedicated Dockerfile.riscv64 and Docker repository:
+
+```bash
+> cd rust-vmm-dev-container
+> ARCH=riscv64 ./docker.sh build
+> ARCH=riscv64 ./docker.sh publish
+> ARCH=riscv64 ./docker.sh manifest
+```
