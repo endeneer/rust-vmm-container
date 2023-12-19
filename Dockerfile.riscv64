@@ -11,7 +11,7 @@ RUN /opt/src/scripts/build_container_riscv64.builder.sh
 # Rootfs Stage
 # Generate guest rootfs
 #==============================
-FROM riscv64/ubuntu:22.04 AS rootfs_builder
+FROM --platform=linux/riscv64 riscv64/ubuntu:22.04 AS rootfs_builder
 
 COPY build_container_riscv64.rootfs.sh /opt/src/scripts/build_container_riscv64.rootfs.sh
 RUN /opt/src/scripts/build_container_riscv64.rootfs.sh
