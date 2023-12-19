@@ -2,7 +2,7 @@
 
 REPO_DIR=/tmp/linux-loader
 REPO_MOUNT_POINT=/workdir
-IMAGE_TAG=rustvmm/dev:v29_riscv64
+IMAGE_TAG=$(ARCH=riscv64 ../../docker.sh print-next-version)_riscv64
 
 ## CI: build-gnu-riscv64
 docker run -it --rm \
